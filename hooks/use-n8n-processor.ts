@@ -2,101 +2,144 @@
 
 import { useState, useRef } from "react";
 
-// --- Definição dos Tipos ---
+// --- Tipos ---
 export type Message = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  files?: Record<string, string>;
   timestamp: Date;
 };
 
-// Payload simplificado para arquitetura Stateful (Redis)
 interface N8nPayload {
   prompt: string;
   sessionId: string;
-  config?: {
-    userId: string;
-  };
+  config?: { userId: string };
 }
 
-// Utilitário para extrair código (exportado para ser usado na UI)
+// Utilitário de fallback para extrair código (se necessário)
 export function extractCodeFromMessage(content: string): string | null {
-  const codeBlockRegex = /```(?:tsx|jsx|javascript|react|typescript)?([\s\S]*?)```/;
-  const match = content.match(codeBlockRegex);
+  const match = content.match(/```(?:tsx|jsx|javascript|react|typescript)?([\s\S]*?)```/);
   return match ? match[1].trim() : null;
 }
 
-// Lê a variável de ambiente
+// --- FUNÇÃO DE PARSING BLINDADA ---
+// Tenta encontrar um JSON válido dentro de uma string suja, ignorando lixo antes e depois.
+function robustJsonParse(input: string): { explanation: string; files: any } | null {
+  if (typeof input !== 'string') return null;
+
+  // 1. Encontra o início do JSON
+  const startIndex = input.indexOf('{');
+  if (startIndex === -1) return null;
+
+  // 2. Coleta todas as posições de fechamento '}'
+  const closingIndices: number[] = [];
+  for (let i = input.length - 1; i > startIndex; i--) {
+    if (input[i] === '}') {
+      closingIndices.push(i);
+    }
+  }
+
+  // 3. Tenta fazer o parse do maior para o menor (Backwards Seek)
+  // Isso garante que pegamos o objeto completo, ignorando lixo no final (como markdown ou comentários)
+  for (const endIndex of closingIndices) {
+    const candidate = input.substring(startIndex, endIndex + 1);
+    try {
+      const result = JSON.parse(candidate);
+      // Validação básica para garantir que não parseamos um pedaço inválido
+      if (result && (result.files || result.explanation)) {
+        return result;
+      }
+    } catch (e) {
+      // Continua tentando com o próximo '}' anterior
+      continue;
+    }
+  }
+
+  return null;
+}
+
 const WEBHOOK_URL = process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL;
 
 export function useN8nProcessor() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-
-  // Gera um ID de sessão único por recarga
   const sessionId = useRef(`sess_${Math.random().toString(36).substring(2, 9)}`).current;
 
   const sendMessage = async (text: string) => {
     if (!text.trim()) return;
 
-    // 1. UI Otimista
+    // 1. Mensagem do Usuário
     const userMsg: Message = {
       id: Date.now().toString(),
       role: "user",
       content: text,
       timestamp: new Date(),
     };
-
     setMessages((prev) => [...prev, userMsg]);
     setIsLoading(true);
 
     try {
-      const payload: N8nPayload = {
-        prompt: text,
-        sessionId: sessionId,
-        config: {
-          userId: "paulo-dev-01",
-        },
-      };
-
-      let aiContent = "";
-
-      // --- CORREÇÃO DO BUG DE URL ---
-      // Antes: WEBHOOK_URL.includes("") -> Sempre true
-      // Agora: Verifica se não tem URL OU se é uma URL de placeholder
+      // Verificação de URL
       const isInvalidUrl = !WEBHOOK_URL || WEBHOOK_URL.includes("SUA_URL_DO_WEBHOOK");
+      
+      let aiRawOutput = "";
 
       if (isInvalidUrl) {
-        console.warn("⚠️ MOCK MODE ATIVADO: Configure o .env.local corretamente.");
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        
-        aiContent = `[MOCK] Erro de configuração. Verifique seu arquivo .env.local.\n\n` +
-        "```tsx\nexport default function App() { return <div className='p-4 text-red-500 font-bold'>URL do N8N não configurada</div> }\n```";
+        console.warn("⚠️ MOCK MODE ATIVADO");
+        await new Promise((r) => setTimeout(r, 1500));
+        aiRawOutput = JSON.stringify({
+          explanation: "[MOCK] URL não configurada. Veja o .env.local",
+          files: { "/app/page.tsx": "export default function Page() { return <div>Configure a URL</div> }" }
+        });
       } else {
-        // --- Requisição Real ao N8N ---
-        // O TS reclama se WEBHOOK_URL for undefined, mas o 'if' acima já garante que existe.
+        // --- Requisição Real ---
         const response = await fetch(WEBHOOK_URL as string, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({
+            prompt: text,
+            sessionId: sessionId,
+            config: { userId: "paulo-dev-01" }
+          }),
         });
 
         if (!response.ok) throw new Error(`Erro N8N: ${response.statusText}`);
 
-        const rawData = await response.json();
-        
-        // TRATAMENTO DE RETORNO (Array vs Objeto)
-        // O seu n8n retorna [{ output: "..." }], este código trata isso:
-        aiContent = Array.isArray(rawData) ? rawData[0].output : rawData.output;
+        const data = await response.json();
+        // Garante que temos a string, independente se o n8n mandou array ou objeto
+        aiRawOutput = Array.isArray(data) ? data[0].output : data.output;
       }
 
-      if (!aiContent) throw new Error("Resposta vazia do N8N");
+      if (!aiRawOutput) throw new Error("Resposta vazia do N8N");
 
-      // 3. Adiciona Resposta
+      // --- PARSING ESTRUTURADO ---
+      let parsedData;
+      
+      // Tenta parse direto primeiro (mais rápido)
+      try {
+        parsedData = typeof aiRawOutput === 'object' ? aiRawOutput : JSON.parse(aiRawOutput);
+      } catch (e) {
+        console.log("JSON direto falhou, tentando limpeza robusta...");
+        // Se falhar, usa o algoritmo de busca reverso
+        parsedData = robustJsonParse(aiRawOutput as string);
+      }
+
+      // Se ainda assim falhar, trata como texto simples (erro de geração)
+      if (!parsedData) {
+        console.error("Falha fatal ao extrair JSON da resposta:", aiRawOutput);
+        parsedData = { 
+          explanation: typeof aiRawOutput === 'string' ? aiRawOutput : "Erro ao processar código.",
+          files: null 
+        };
+      }
+
+      // 4. Atualiza Chat
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: aiContent,
+        content: parsedData.explanation || "Aqui está o projeto.",
+        files: parsedData.files || undefined,
         timestamp: new Date(),
       };
 
@@ -104,23 +147,16 @@ export function useN8nProcessor() {
 
     } catch (error) {
       console.error("Erro no processamento:", error);
-      const errorMsg: Message = {
+      setMessages((prev) => [...prev, {
         id: Date.now().toString(),
         role: "assistant",
-        content: "🚨 Erro de conexão. Verifique se o workflow do n8n está ativo e a URL no .env.local está correta.",
+        content: "🚨 Ocorreu um erro ao gerar o projeto. Tente novamente.",
         timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMsg]);
+      }]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  return {
-    messages,
-    isLoading,
-    sendMessage,
-    hasMessages: messages.length > 0,
-    sessionId 
-  };
+  return { messages, isLoading, sendMessage, hasMessages: messages.length > 0, sessionId };
 }

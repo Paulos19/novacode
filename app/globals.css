@@ -123,3 +123,54 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* --- ADIÇÃO: Scrollbars Personalizadas --- */
+@layer utilities {
+  /* --- VS Code Scrollbar Style --- */
+  .vscode-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #424242 transparent;
+  }
+
+  .vscode-scrollbar::-webkit-scrollbar {
+    width: 10px; /* Largura padrão do VS Code */
+    height: 10px;
+  }
+
+  .vscode-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .vscode-scrollbar::-webkit-scrollbar-thumb {
+    background-color: #424242; /* Cor escura do 'thumb' */
+    border: 2px solid transparent; /* Cria o efeito de padding */
+    background-clip: content-box;
+    border-radius: 0px; /* VS Code usa cantos quadrados ou levemente arredondados */
+  }
+
+  .vscode-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: #4f4f4f; /* Cor ao passar o mouse */
+  }
+
+  .vscode-scrollbar::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+/* --- Override Global para o Editor de Código (Sandpack/CodeMirror) --- */
+/* Isso garante que o editor de código também tenha a barra estilizada */
+.cm-scroller::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+.cm-scroller::-webkit-scrollbar-track {
+  background: #1e1e1e; /* Cor de fundo do editor */
+}
+.cm-scroller::-webkit-scrollbar-thumb {
+  background-color: #424242;
+  border: 3px solid #1e1e1e; /* Cria borda para separar do track */
+  border-radius: 10px;
+}
+.cm-scroller::-webkit-scrollbar-thumb:hover {
+  background-color: #4f4f4f;
+}
