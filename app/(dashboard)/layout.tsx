@@ -1,7 +1,7 @@
 import { DashboardProvider } from "@/components/providers/dashboard-provider";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { Header } from "@/components/dashboard/header";
-import { auth } from "@/auth"; //
+import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 
 export default async function DashboardLayout({
@@ -17,11 +17,11 @@ export default async function DashboardLayout({
 
   return (
     <DashboardProvider>
-      <div className="flex h-screen w-full bg-[#131314] overflow-hidden font-sans">
+      <div className="flex h-screen w-full bg-[#09090b] overflow-hidden font-sans">
         <Sidebar />
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 bg-[#09090b]">
           <Header />
-          <main className="flex-1 overflow-hidden relative flex flex-col">
+          <main className="flex-1 flex flex-col min-h-0 relative overflow-hidden">
             {children}
           </main>
         </div>

@@ -124,53 +124,35 @@
   }
 }
 
-/* --- ADIÇÃO: Scrollbars Personalizadas --- */
 @layer utilities {
-  /* --- VS Code Scrollbar Style --- */
-  .vscode-scrollbar {
+  /* --- Scrollbar Personalizada (Estilo VS Code / Moderno) --- */
+  .custom-scrollbar {
     scrollbar-width: thin;
-    scrollbar-color: #424242 transparent;
+    scrollbar-color: #27272a transparent; /* Thumb Track */
   }
 
-  .vscode-scrollbar::-webkit-scrollbar {
-    width: 10px; /* Largura padrão do VS Code */
+  /* Webkit (Chrome, Edge, Safari) */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 10px;
     height: 10px;
   }
 
-  .vscode-scrollbar::-webkit-scrollbar-track {
+  .custom-scrollbar::-webkit-scrollbar-track {
     background: transparent;
   }
 
-  .vscode-scrollbar::-webkit-scrollbar-thumb {
-    background-color: #424242; /* Cor escura do 'thumb' */
-    border: 2px solid transparent; /* Cria o efeito de padding */
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: #27272a; /* Zinc-800 matches border */
+    border-radius: 9999px;
+    border: 3px solid transparent; /* Cria um padding visual */
     background-clip: content-box;
-    border-radius: 0px; /* VS Code usa cantos quadrados ou levemente arredondados */
   }
 
-  .vscode-scrollbar::-webkit-scrollbar-thumb:hover {
-    background-color: #4f4f4f; /* Cor ao passar o mouse */
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: #3f3f46; /* Zinc-700 on hover */
   }
 
-  .vscode-scrollbar::-webkit-scrollbar-corner {
+  .custom-scrollbar::-webkit-scrollbar-corner {
     background: transparent;
   }
-}
-
-/* --- Override Global para o Editor de Código (Sandpack/CodeMirror) --- */
-/* Isso garante que o editor de código também tenha a barra estilizada */
-.cm-scroller::-webkit-scrollbar {
-  width: 12px;
-  height: 12px;
-}
-.cm-scroller::-webkit-scrollbar-track {
-  background: #1e1e1e; /* Cor de fundo do editor */
-}
-.cm-scroller::-webkit-scrollbar-thumb {
-  background-color: #424242;
-  border: 3px solid #1e1e1e; /* Cria borda para separar do track */
-  border-radius: 10px;
-}
-.cm-scroller::-webkit-scrollbar-thumb:hover {
-  background-color: #4f4f4f;
 }
